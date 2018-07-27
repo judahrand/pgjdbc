@@ -56,7 +56,6 @@ public class V3ReplicationProtocol implements ReplicationProtocol {
 
     configureSocketTimeout(options);
     CopyDual copyDual = (CopyDual) queryExecutor.startCopy(query, true);
-
     return new V3PGReplicationStream(
         copyDual,
         options.getStartLSNPosition(),

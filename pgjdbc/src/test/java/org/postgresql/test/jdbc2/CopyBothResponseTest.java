@@ -22,6 +22,7 @@ import org.postgresql.test.util.rules.annotation.HaveMinimalServerVersion;
 import org.hamcrest.CoreMatchers;
 import org.junit.After;
 import org.junit.AfterClass;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -99,10 +100,17 @@ public class CopyBothResponseTest {
     CopyDual copyDual = cm.copyDual(
         "START_REPLICATION " + logSequenceNumber.asString());
 
-    sendStandByUpdate(copyDual, logSequenceNumber, logSequenceNumber, logSequenceNumber, true);
     ByteBuffer buf = ByteBuffer.wrap(copyDual.readFromCopy());
-
     int code = buf.get();
+    assertThat(
+        "Streaming replication start with swap keep alive message, we want that first get packege will be keep alive",
+        code, equalTo((int) 'w')
+    );
+
+    sendStandByUpdate(copyDual, logSequenceNumber, logSequenceNumber, logSequenceNumber, true);
+    buf = ByteBuffer.wrap(copyDual.readFromCopy());
+
+    code = buf.get();
     copyDual.endCopy();
 
     assertThat(
@@ -112,7 +120,7 @@ public class CopyBothResponseTest {
   }
 
   @Test
-  public void testKeedAliveContaintCorrectLSN() throws Exception {
+  public void testKeepAliveContaintCorrectLSN() throws Exception {
     CopyManager cm = ((PGConnection) replConnection).getCopyAPI();
 
     LogSequenceNumber startLsn = getCurrentLSN();
@@ -159,6 +167,25 @@ public class CopyBothResponseTest {
     );
   }
 
+  @Test
+  public void testLogicalReplicationError() throws Exception {
+    TestUtil.recreateLogicalReplicationSlot(sqlConnection, "yxz", "nonexistant");
+
+    CopyManager cm = ((PGConnection) replConnection).getCopyAPI();
+
+    LogSequenceNumber startLsn = getCurrentLSN();
+
+
+    try {
+      CopyDual copyDual =
+          cm.copyDual("START_REPLICATION SLOT yxz LOGICAL 0/0 ");
+    }catch (SQLException ex){
+      return;
+    }finally {
+      TestUtil.dropReplicationSlot(sqlConnection, "xyz");
+    }
+      Assert.fail("should have thrown an SQLException");
+  }
   private void sendStandByUpdate(CopyDual copyDual, LogSequenceNumber received,
       LogSequenceNumber flushed, LogSequenceNumber applied, boolean replyRequired)
       throws SQLException {

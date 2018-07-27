@@ -840,7 +840,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       pgStream.flush();
 
       return processCopyResults(null, true);
-      // expect a CopyInResponse or CopyOutResponse to our query above
+      // expect a CopyInResponse, CopyOutResponse, CopyBoth to our query above
     } catch (IOException ioe) {
       throw new PSQLException(GT.tr("Database connection failed when starting copy"),
           PSQLState.CONNECTION_FAILURE, ioe);
@@ -1044,8 +1044,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    * on pgStream or QueryExecutor are not allowed in a method after calling this!
    *
    * @param block whether to block waiting for input
-   * @return CopyIn when COPY FROM STDIN starts; CopyOut when COPY TO STDOUT starts; null when copy
-   *         ends; otherwise, the operation given as parameter.
+   * @return CopyIn when COPY FROM STDIN starts; CopyOut when COPY TO STDOUT starts;
+   * or CopyBoth when starting replication.
+   * null when copy ends;
+   * otherwise, the operation given as parameter.
    * @throws SQLException in case of misuse
    * @throws IOException from the underlying connection
    */
@@ -1159,7 +1161,7 @@ public class QueryExecutorImpl extends QueryExecutorBase {
 
           op = new CopyDualImpl();
           initCopy(op);
-          endReceiving = true;
+//          endReceiving = true;
           break;
 
         case 'd': // CopyData
