@@ -37,8 +37,8 @@ public class MakeSSL extends ObjectFactory {
     // unless sslmode is set
     String classname = PGProperty.SSL_FACTORY.get(info);
     if (classname == null) {
-      // If sslmode is set, use the libpq compatible factory
-      if (sslmode != null) {
+      // If sslmode is set, and not disabled use the libpq compatible factory
+      if ( sslmode != null &&  !"disable".equalsIgnoreCase(sslmode) ) {
         factory = new LibPQFactory(info);
       } else {
         factory = (SSLSocketFactory) SSLSocketFactory.getDefault();
@@ -68,33 +68,45 @@ public class MakeSSL extends ObjectFactory {
           PSQLState.CONNECTION_FAILURE, ex);
     }
 
-    String sslhostnameverifier = PGProperty.SSL_HOSTNAME_VERIFIER.get(info);
-    if (sslhostnameverifier != null) {
-      HostnameVerifier hvn;
-      try {
-        hvn = (HostnameVerifier) instantiate(sslhostnameverifier, info, false, null);
-      } catch (Exception e) {
-        throw new PSQLException(
-            GT.tr("The HostnameVerifier class provided {0} could not be instantiated.",
-                sslhostnameverifier),
-            PSQLState.CONNECTION_FAILURE, e);
-      }
-      if (!hvn.verify(stream.getHostSpec().getHost(), newConnection.getSession())) {
-        throw new PSQLException(
-            GT.tr("The hostname {0} could not be verified by hostnameverifier {1}.",
-                stream.getHostSpec().getHost(), sslhostnameverifier),
-            PSQLState.CONNECTION_FAILURE);
-      }
-    } else {
-      if ("verify-full".equals(sslmode) && factory instanceof LibPQFactory) {
-        if (!(((LibPQFactory) factory).verify(stream.getHostSpec().getHost(),
-            newConnection.getSession()))) {
+    /*
+     * force verification unless the user has explicitly asked us not to.
+     * note: sslmode defaults to verify-full but check for null anyway
+     */
+    if ( sslmode != null && !"disable".equalsIgnoreCase(sslmode) ) {
+      String sslhostnameverifier = PGProperty.SSL_HOSTNAME_VERIFIER.get(info);
+      if (sslhostnameverifier != null) {
+        HostnameVerifier hvn;
+        try {
+          hvn = (HostnameVerifier) instantiate(sslhostnameverifier, info, false, null);
+        } catch (Exception e) {
           throw new PSQLException(
-              GT.tr("The hostname {0} could not be verified.", stream.getHostSpec().getHost()),
+              GT.tr("The HostnameVerifier class provided {0} could not be instantiated.",
+                  sslhostnameverifier),
+              PSQLState.CONNECTION_FAILURE, e);
+        }
+        if (!hvn.verify(stream.getHostSpec().getHost(), newConnection.getSession())) {
+          throw new PSQLException(
+              GT.tr("The hostname {0} could not be verified by hostnameverifier {1}.",
+                  stream.getHostSpec().getHost(), sslhostnameverifier),
               PSQLState.CONNECTION_FAILURE);
         }
+      } else {
+        if ("verify-full".equals(sslmode) ) {
+          if (factory instanceof HostnameVerifier) {
+            if (!(((HostnameVerifier) factory).verify(stream.getHostSpec().getHost(),
+                newConnection.getSession()))) {
+              throw new PSQLException(
+                  GT.tr("The hostname {0} could not be verified.", stream.getHostSpec().getHost()),
+                  PSQLState.CONNECTION_FAILURE);
+            }
+          } else {
+            throw new PSQLException(
+                GT.tr("The hostname {0} could not be verified ... no verifier available ",
+                    stream.getHostSpec().getHost()),
+                PSQLState.CONNECTION_FAILURE);
+          }
+        }
       }
-
     }
     stream.changeSocket(newConnection);
   }
