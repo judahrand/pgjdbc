@@ -33,6 +33,7 @@ public class MakeSSL extends ObjectFactory {
     SSLSocketFactory factory;
 
     String sslmode = PGProperty.SSL_MODE.get(info);
+
     // Use the default factory if no specific factory is requested
     // unless sslmode is set
     String classname = PGProperty.SSL_FACTORY.get(info);
@@ -69,10 +70,11 @@ public class MakeSSL extends ObjectFactory {
     }
 
     /*
-     * force verification unless the user has explicitly asked us not to.
-     * note: sslmode defaults to verify-full but check for null anyway
+     * force host name verification unless the user has explicitly asked us not to.
+     *
      */
     if ( sslmode != null && !"disable".equalsIgnoreCase(sslmode) ) {
+      // did the user give us a HostnameVerifier ?
       String sslhostnameverifier = PGProperty.SSL_HOSTNAME_VERIFIER.get(info);
       if (sslhostnameverifier != null) {
         HostnameVerifier hvn;
@@ -91,6 +93,12 @@ public class MakeSSL extends ObjectFactory {
               PSQLState.CONNECTION_FAILURE);
         }
       } else {
+        /*
+        * no custom HostnameVerifier and they have asked for verify-full, do all we can to verify the hostname
+        * LibPQFactory implements HostnameVerifier; we can use that to verify. otherwise throw
+        * and exception
+        */
+
         if ("verify-full".equals(sslmode) ) {
           if (factory instanceof HostnameVerifier) {
             if (!(((HostnameVerifier) factory).verify(stream.getHostSpec().getHost(),

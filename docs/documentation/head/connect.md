@@ -86,7 +86,9 @@ Connection conn = DriverManager.getConnection(url);
 
 	The provided value is a class name to use as the `SSLSocketFactory` when
 	establishing a SSL connection. For more information see the section
-	called [“Custom SSLSocketFactory”](ssl-factory.html). 
+	called [“Custom SSLSocketFactory”](ssl-factory.html). Note the supplied factory also implements
+	HostnameVerifier. In order for sslmode=verify-full to work properly the user should provide a factory
+	which implements HostnameVerifier or supply a custom HostnameVerifier via sslhostnameverifier.
 
 * **sslfactoryarg** = String
 
@@ -95,11 +97,13 @@ Connection conn = DriverManager.getConnection(url);
 
 * **sslmode** = String
 
-	possible values include "disable", "require", "verify-ca" and "verify-full", "allow" and "prefer" 
-	will throw an exception. "require" will default to a non validating SSL factory and not check the 
-	validity of the certificates. "verify-ca" and "verify-full" use a validating SSL factory and will 
-	check that the ca is correct and the host is correct. Setting these will necessitate storing the 
-	server certificate on the client machine ["Configuring the client"](ssl-client.html).
+	possible values include "disable", "require", "verify-ca" and "verify-full".
+	"allow" and "prefer" will throw an exception. "require" will default to a non validating 
+	SSL factory and not check the validity of the certificates. 
+	"verify-ca" and "verify-full" use a validating SSL factory and will check that the ca is 
+	correct. "verify-ca" will check the host iff sslhostnameverifier provides a custom hostnameverifier
+	"verify-full" will ensure that the host is correct or fail. Setting these will necessitate storing 
+	the server certificate on the client machine ["Configuring the client"](ssl-client.html).
 
 * **sslcert** = String
 
@@ -118,6 +122,7 @@ Connection conn = DriverManager.getConnection(url);
 * **sslhostnameverifier** = String
 
 	Class name of hostname verifier. Defaults to using `org.postgresql.ssl.jdbc4.LibPQFactory.verify()`
+	There are some interactions with sslmode that the use needs to be aware of.
 
 * **sslpasswordcallback** = String
 
