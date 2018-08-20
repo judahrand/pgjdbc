@@ -9,11 +9,29 @@ nexttitle: Custom SSLSocketFactory
 next: ssl-factory.html
 ---
 
+There are a number of connection parameters for configuring the client for ssl.
+
+The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both 
+the ssl certificate and the hostname. Note this is different than libpq which defaults to a 
+non-validating ssl connection.
+
+More control of the connection can be achieved using the `sslmode` connection parameter. 
+This parameter is the same as the libpq `sslmode` parameter and the currently ssl implements the following 
+
+|sslmode| Eavesdropping Protection| MITM Protection | |
+| :---| :--- | :--- | :--- |
+| disable | No | No | I don't care about security and don't want to pay the overhead for encryption|
+| allow | Maybe | No | I don't care about security but will pay the overhead for encryption if the server insists on it |
+| prefer | Maybe | No | I don't care about encryption but will pay the overhead of encryption if the server supports it |
+| require | Yes | No | I want my data to be encrypted, and I accept the overhead. I trust that the network will make sure I always connect to the server I want.|
+| verify-ca | Yes | Depends on CA policy | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server that I trust.|
+| verify-full | Yes | Yes | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server I trust, and that it's the one I specify.|
+
 Unlike psql and other libpq based programs the JDBC driver does server certificate
-validation by default.  This means that when establishing a SSL connection the
+validation and hostname verification by default.  This means that when establishing a SSL connection the
 JDBC driver will validate the server's identity preventing "man in the middle"
 attacks. It does this by checking that the server certificate is signed by a
-trusted authority. If you have a certificate signed by a global certificate
+trusted authority, and that the host you are connecting to is the same as the hostname in the certificate. If you have a certificate signed by a global certificate
 authority (CA), there is nothing further to do because Java comes with copies of
 the most common CA's certificates. If you are dealing with a self-signed certificate
 though, you need to make this available to the Java client to enable it to validate
@@ -21,9 +39,9 @@ the server's certificate.
 
 > ### Note
 
-> Only the JDBC driver version 3 and greater  supports SSL. The 1.4 JDK was the 
-first version to come bundled with SSL support. Previous JDK versions that wanted 
-to use SSL could make use of the additional JSSE library, but it does not support 
+> Only the JDBC driver version 3 and greater  supports SSL. The 1.4 JDK was the
+first version to come bundled with SSL support. Previous JDK versions that wanted
+to use SSL could make use of the additional JSSE library, but it does not support
 the full range of features utilized by the PostgreSQL™ JDBC driver.
 
 To make the server certificate available to Java, the first step is to convert

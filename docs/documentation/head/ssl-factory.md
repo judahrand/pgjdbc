@@ -23,7 +23,3 @@ Information on how to actually implement such a class is beyond the scope of thi
 documentation. Places to look for help are the [JSSE Reference Guide](https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html)
 and the source to the `NonValidatingFactory` provided by the JDBC driver.
 
-The Java SSL API is not very well known to the JDBC driver developers and we
-would be interested in any interesting and generally useful extensions that you
-have implemented using this mechanism. Specifically it would be nice to be able
-to provide client certificates to be validated by the server.

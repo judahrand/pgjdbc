@@ -88,18 +88,19 @@ Connection conn = DriverManager.getConnection(url);
 	establishing a SSL connection. For more information see the section
 	called [“Custom SSLSocketFactory”](ssl-factory.html). 
 
-* **sslfactoryarg** = String
+* **sslfactoryarg** (deprecated) = String
 
 	This value is an optional argument to the constructor of the sslfactory
 	class provided above. For more information see the section called [“Custom SSLSocketFactory”](ssl-factory.html). 
 
 * **sslmode** = String
 
-	possible values include "disable", "require", "verify-ca" and "verify-full", "allow" and "prefer" 
-	will throw an exception. "require" will default to a non validating SSL factory and not check the 
-	validity of the certificates. "verify-ca" and "verify-full" use a validating SSL factory and will 
-	check that the ca is correct and the host is correct. Setting these will necessitate storing the 
-	server certificate on the client machine ["Configuring the client"](ssl-client.html).
+	possible values include `disable`, `require`, `allow`, `prefer`, `verify-ca` and `verify-full` 
+	. `require`, `allow` and `prefer` all default to a non validating SSL factory and do not check the 
+	validity of the certificate or the host name. `verify-ca` verifies the certificate, but not the host
+	`verify-full`  will verify that the certificate is correct and the host is correct. 
+	Setting these will necessitate storing the server certificate on the client machine see 
+	["Configuring the client"](ssl-client.html) for details.
 
 * **sslcert** = String
 
@@ -117,7 +118,7 @@ Connection conn = DriverManager.getConnection(url);
 
 * **sslhostnameverifier** = String
 
-	Class name of hostname verifier. Defaults to using `org.postgresql.ssl.jdbc4.LibPQFactory.verify()`
+	Class name of hostname verifier. Defaults to using `org.postgresql.ssl.PgjdbcHostnameVerifier()`
 
 * **sslpasswordcallback** = String
 
@@ -408,7 +409,7 @@ Connection conn = DriverManager.getConnection(url);
 	This class must have a zero argument constructor or a single argument constructor taking a String argument. 
 	This argument may optionally be supplied by `socketFactoryArg`.
 
-* **socketFactoryArg** = String
+* **socketFactoryArg**(deprecated) = String
 
 	This value is an optional argument to the constructor of the socket factory
 	class provided above. 
