@@ -12,11 +12,27 @@ next: ssl-factory.html
 There are a number of connection parameters for configuring the client for ssl.
 
 The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both 
-the ssl certificate and the hostname. Note this is different than libpq which defaults to a 
-non-validating ssl connection.
+the ssl certificate and verify the hostname (same as `verify-full`). **Note** this is different than
+libpq which defaults to a non-validating ssl connection.
 
-More control of the connection can be achieved using the `sslmode` connection parameter. 
-This parameter is the same as the libpq `sslmode` parameter and the currently ssl implements the following 
+In this mode, when establishing a SSL connection the JDBC driver will validate the server's
+identity preventing "man in the middle" attacks. It does this by checking that the server
+certificate is signed by a trusted authority, and that the host you are connecting to is the
+same as the hostname in the certificate.
+
+If you only require encryption then set `sslmode=require`
+In the case where the certificate validation is failing you can do one of two things. Either pass
+`sslcert=` and LibPQFactory will ignore the client certificate or use the `NonValidatingFactory`
+which will trust all server certificates.
+
+If you have a certificate signed by a global certificate authority (CA), there is nothing further
+to do because Java comes with copies of the most common CA's certificates. If you are dealing with
+a self-signed certificate though, you need to make this available to the Java client to enable it
+to validate the server's certificate (see below for details).
+
+Finer control of the SSL connection can be achieved using the `sslmode` connection parameter.
+This parameter is the same as the libpq `sslmode` parameter and the currently ssl implements the
+following
 
 |sslmode| Eavesdropping Protection| MITM Protection | |
 | :---| :--- | :--- | :--- |
@@ -27,15 +43,6 @@ This parameter is the same as the libpq `sslmode` parameter and the currently ss
 | verify-ca | Yes | Depends on CA policy | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server that I trust.|
 | verify-full | Yes | Yes | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server I trust, and that it's the one I specify.|
 
-Unlike psql and other libpq based programs the JDBC driver does server certificate
-validation and hostname verification by default.  This means that when establishing a SSL connection the
-JDBC driver will validate the server's identity preventing "man in the middle"
-attacks. It does this by checking that the server certificate is signed by a
-trusted authority, and that the host you are connecting to is the same as the hostname in the certificate. If you have a certificate signed by a global certificate
-authority (CA), there is nothing further to do because Java comes with copies of
-the most common CA's certificates. If you are dealing with a self-signed certificate
-though, you need to make this available to the Java client to enable it to validate
-the server's certificate.
 
 > ### Note
 

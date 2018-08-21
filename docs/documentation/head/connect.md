@@ -95,10 +95,12 @@ Connection conn = DriverManager.getConnection(url);
 
 * **sslmode** = String
 
-	possible values include `disable`, `require`, `allow`, `prefer`, `verify-ca` and `verify-full` 
+	possible values include `disable`, `allow`, `prefer`, `require`, `verify-ca` and `verify-full` 
 	. `require`, `allow` and `prefer` all default to a non validating SSL factory and do not check the 
-	validity of the certificate or the host name. `verify-ca` verifies the certificate, but not the host
-	`verify-full`  will verify that the certificate is correct and the host is correct. 
+	validity of the certificate or the host name. `verify-ca` validates the certificate, but does not 
+	verify the hostname. `verify-full`  will validate that the certificate is correct and verify the 
+	host connected to has the same hostname as the certificate.
+
 	Setting these will necessitate storing the server certificate on the client machine see 
 	["Configuring the client"](ssl-client.html) for details.
 
@@ -409,7 +411,7 @@ Connection conn = DriverManager.getConnection(url);
 	This class must have a zero argument constructor or a single argument constructor taking a String argument. 
 	This argument may optionally be supplied by `socketFactoryArg`.
 
-* **socketFactoryArg**(deprecated) = String
+* **socketFactoryArg** (deprecated) = String
 
 	This value is an optional argument to the constructor of the socket factory
 	class provided above. 
