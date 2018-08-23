@@ -11,7 +11,7 @@ next: ssl-factory.html
 
 There are a number of connection parameters for configuring the client for SSL. See [SSL Connection parameters](connect.html#ssl)
 
-The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both 
+The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both
 the SSL certificate and verify the hostname (same as `verify-full`). **Note** this is different than
 libpq which defaults to a non-validating SSL connection.
 
@@ -32,11 +32,11 @@ certificate stored on the client.
 If `sslmode=verify-full`, the server host name will be verified to make sure it matches the name
 stored in the server certificate.
 
-The SSL connection will fail if the server certificate cannot be verified. verify-full is recommended
+The SSL connection will fail if the server certificate cannot be verified. `verify-full` is recommended
 in most security-sensitive environments.
 
 
-In the case where the certificate validation is failing you can try `sslcert=` and LibPQFactory will 
+In the case where the certificate validation is failing you can try `sslcert=` and LibPQFactory will
 not send the client certificate. If the server is not configured to authenticate using the certificate
 it should connect.
 

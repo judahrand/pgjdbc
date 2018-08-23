@@ -95,13 +95,13 @@ Connection conn = DriverManager.getConnection(url);
 
 * **sslmode** = String
 
-	possible values include `disable`, `allow`, `prefer`, `require`, `verify-ca` and `verify-full` 
-	. `require`, `allow` and `prefer` all default to a non validating SSL factory and do not check the 
-	validity of the certificate or the host name. `verify-ca` validates the certificate, but does not 
-	verify the hostname. `verify-full`  will validate that the certificate is correct and verify the 
+	possible values include `disable`, `allow`, `prefer`, `require`, `verify-ca` and `verify-full`
+	. `require`, `allow` and `prefer` all default to a non validating SSL factory and do not check the
+	validity of the certificate or the host name. `verify-ca` validates the certificate, but does not
+	verify the hostname. `verify-full`  will validate that the certificate is correct and verify the
 	host connected to has the same hostname as the certificate.
 
-	Setting these will necessitate storing the server certificate on the client machine see 
+	Setting these will necessitate storing the server certificate on the client machine see
 	["Configuring the client"](ssl-client.html) for details.
 
 * **sslcert** = String
@@ -120,7 +120,7 @@ Connection conn = DriverManager.getConnection(url);
 
 * **sslhostnameverifier** = String
 
-	Class name of hostname verifier. Defaults to using `org.postgresql.ssl.PgjdbcHostnameVerifier()`
+	Class name of hostname verifier. Defaults to using `org.postgresql.ssl.PGjdbcHostnameVerifier`
 
 * **sslpasswordcallback** = String
 
