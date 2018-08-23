@@ -9,7 +9,7 @@ nexttitle: Custom SSLSocketFactory
 next: ssl-factory.html
 ---
 
-There are a number of connection parameters for configuring the client for ssl.
+There are a number of connection parameters for configuring the client for ssl. See [SSL Connection parameters](connect.html#ssl)
 
 The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both 
 the ssl certificate and verify the hostname (same as `verify-full`). **Note** this is different than
@@ -25,10 +25,10 @@ In the case where the certificate validation is failing you can do one of two th
 `sslcert=` and LibPQFactory will ignore the client certificate or use the `NonValidatingFactory`
 which will trust all server certificates.
 
-If you have a certificate signed by a global certificate authority (CA), there is nothing further
-to do because Java comes with copies of the most common CA's certificates. If you are dealing with
-a self-signed certificate though, you need to make this available to the Java client to enable it
-to validate the server's certificate (see below for details).
+The location of the client certificate, client key and root certificate can be overridden with the
+`sslcert`, `sslkey`, `sslrootcert` settings respectively. These default to /defaultdir/postgresql.crt,
+/defaultdir/postgresql.pk8, and /defaultdir/root.crt respectively where defaultdir is
+${user.home}/.postgresql/ in *nix systems and %appdata%/postgresql/ on windows
 
 Finer control of the SSL connection can be achieved using the `sslmode` connection parameter.
 This parameter is the same as the libpq `sslmode` parameter and the currently ssl implements the
@@ -46,12 +46,8 @@ following
 
 > ### Note
 
-> Only the JDBC driver version 3 and greater  supports SSL. The 1.4 JDK was the
-first version to come bundled with SSL support. Previous JDK versions that wanted
-to use SSL could make use of the additional JSSE library, but it does not support
-the full range of features utilized by the PostgreSQL™ JDBC driver.
-
-To make the server certificate available to Java, the first step is to convert
+If you are using Java's default mechanism (not LibPQFactory)to create the SSL connection you will
+need to make the server certificate available to Java, the first step is to convert
 it to a form Java understands.
 
 `openssl x509 -in server.crt -out server.crt.der -outform der`
@@ -77,9 +73,6 @@ to use.
 In the event of problems extra debugging information is available by adding
 `-Djavax.net.debug=ssl` to your command line.
 
-To instruct the JDBC driver to try and establish a SSL connection you must add
-the connection URL parameter `ssl=true`. See [SSL Connection parameters](connect.html#ssl)
-
 <a name="nonvalidating"></a>
 ## Using SSL without Certificate Validation
 
@@ -90,6 +83,6 @@ certificate authority, but that is not always an option.  The JDBC driver provid
 an option to establish a SSL connection without doing any validation, but please
 understand the risk involved before enabling this option.
 
-A non-validating connection is established via a custom `SSLSocketFactory` class
-that is provided with the driver. Setting the connection URL parameter `sslfactory=org.postgresql.ssl.NonValidatingFactory`
+A non-validating connection is established via a custom `SSLSocketFactory` class that is provided
+with the driver. Setting the connection URL parameter `sslfactory=org.postgresql.ssl.NonValidatingFactory`
 will turn off all SSL validation.
