@@ -9,21 +9,36 @@ nexttitle: Custom SSLSocketFactory
 next: ssl-factory.html
 ---
 
-There are a number of connection parameters for configuring the client for ssl. See [SSL Connection parameters](connect.html#ssl)
+There are a number of connection parameters for configuring the client for SSL. See [SSL Connection parameters](connect.html#ssl)
 
 The simplest being `ssl=true`, passing this into the driver will cause the driver to validate both 
-the ssl certificate and verify the hostname (same as `verify-full`). **Note** this is different than
-libpq which defaults to a non-validating ssl connection.
+the SSL certificate and verify the hostname (same as `verify-full`). **Note** this is different than
+libpq which defaults to a non-validating SSL connection.
 
 In this mode, when establishing a SSL connection the JDBC driver will validate the server's
 identity preventing "man in the middle" attacks. It does this by checking that the server
 certificate is signed by a trusted authority, and that the host you are connecting to is the
 same as the hostname in the certificate.
 
-If you only require encryption then set `sslmode=require`
-In the case where the certificate validation is failing you can do one of two things. Either pass
-`sslcert=` and LibPQFactory will ignore the client certificate or use the `NonValidatingFactory`
-which will trust all server certificates.
+If you **require** encryption and want the connection to fail if it can't be encrypted then set
+`sslmode=require` this ensures that the server is configured to accept SSL connections for this
+Host/IP address and that the server recognizes the client certificate. In other words if the server
+does not accept SSL connections or the client certificate is not recognized the connection will fail.
+**Note** in this mode we will accept all server certificates.
+
+If `sslmode=verify-ca`, the server is verified by checking the certificate chain up to the root
+certificate stored on the client.
+
+If `sslmode=verify-full`, the server host name will be verified to make sure it matches the name
+stored in the server certificate.
+
+The SSL connection will fail if the server certificate cannot be verified. verify-full is recommended
+in most security-sensitive environments.
+
+
+In the case where the certificate validation is failing you can try `sslcert=` and LibPQFactory will 
+not send the client certificate. If the server is not configured to authenticate using the certificate
+it should connect.
 
 The location of the client certificate, client key and root certificate can be overridden with the
 `sslcert`, `sslkey`, and `sslrootcert` settings respectively. These default to /defaultdir/postgresql.crt,
@@ -31,7 +46,7 @@ The location of the client certificate, client key and root certificate can be o
 ${user.home}/.postgresql/ in *nix systems and %appdata%/postgresql/ on windows
 
 Finer control of the SSL connection can be achieved using the `sslmode` connection parameter.
-This parameter is the same as the libpq `sslmode` parameter and the currently ssl implements the
+This parameter is the same as the libpq `sslmode` parameter and the currently SSL implements the
 following
 
 |sslmode| Eavesdropping Protection| MITM Protection | |

@@ -14,11 +14,10 @@ established. This may be used to provide a custom certificate source or other
 extensions by allowing the developer to create their own `SSLContext` instance.
 The connection URL parameters `sslfactory` allow the user to specify which custom
 class to use for creating the `SSLSocketFactory`. The class name specified by `sslfactory`
-must extend `org.postgresql.ssl.WrappedFactory` and be available to the driver's classloader.
+must extend ` javax.net.ssl.SSLSocketFactory` and be available to the driver's classloader.
 
 This class must have a zero argument constructor or a single argument constructor preferentially taking
-a `Properties` argument or `String` argument (which will be set from the deprecated `sslfactoryarg`
-parameter).  There is a simple `org.postgresql.ssl/DefaultJavaSSLFactory` provided which uses the
+a `Properties` argument. There is a simple `org.postgresql.ssl/DefaultJavaSSLFactory` provided which uses the
 default java SSLFactory.
 
 Information on how to actually implement such a class is beyond the scope of this
