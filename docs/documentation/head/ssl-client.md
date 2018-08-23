@@ -26,7 +26,7 @@ In the case where the certificate validation is failing you can do one of two th
 which will trust all server certificates.
 
 The location of the client certificate, client key and root certificate can be overridden with the
-`sslcert`, `sslkey`, `sslrootcert` settings respectively. These default to /defaultdir/postgresql.crt,
+`sslcert`, `sslkey`, and `sslrootcert` settings respectively. These default to /defaultdir/postgresql.crt,
 /defaultdir/postgresql.pk8, and /defaultdir/root.crt respectively where defaultdir is
 ${user.home}/.postgresql/ in *nix systems and %appdata%/postgresql/ on windows
 
@@ -46,7 +46,7 @@ following
 
 > ### Note
 
-If you are using Java's default mechanism (not LibPQFactory)to create the SSL connection you will
+If you are using Java's default mechanism (not LibPQFactory) to create the SSL connection you will
 need to make the server certificate available to Java, the first step is to convert
 it to a form Java understands.
 
