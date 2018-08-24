@@ -49,17 +49,36 @@ Finer control of the SSL connection can be achieved using the `sslmode` connecti
 This parameter is the same as the libpq `sslmode` parameter and the currently SSL implements the
 following
 
-|sslmode| Eavesdropping Protection| MITM Protection | |
-| :---| :--- | :--- | :--- |
-| disable | No | No | I don't care about security and don't want to pay the overhead for encryption|
-| allow | Maybe | No | I don't care about security but will pay the overhead for encryption if the server insists on it |
-| prefer | Maybe | No | I don't care about encryption but will pay the overhead of encryption if the server supports it |
-| require | Yes | No | I want my data to be encrypted, and I accept the overhead. I trust that the network will make sure I always connect to the server I want.|
-| verify-ca | Yes | Depends on CA policy | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server that I trust.|
-| verify-full | Yes | Yes | I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server I trust, and that it's the one I specify.|
+<div class="tblBasic">
+<table class="tblBasicWhite" border="1" summary="SSL Mode Descriptions" cellspacing="0" cellpadding="0">
+<thead>
+<tr>
+  <th>sslmode</th><th>Eavesdropping Protection</th><th> MITM Protection</th><th/>
+</tr>
+</thead>
+<tr>
+  <td>disable</td><td>No</td><td>No</td><td>I don't care about security and don't want to pay the overhead for encryption</td>
+</tr>
+<tr>
+  <td>allow</td><td>Maybe</td><td>No</td><td>I don't care about security but will pay the overhead for encryption if the server insists on it</td>
+</tr>
+<tr>
+  <td>prefer</td><td>Maybe</td><td>No</td><td>I don't care about encryption but will pay the overhead of encryption if the server supports it</td>
+</tr>
+<tr>
+  <td>require</td><td>Yes</td><td>No</td><td>I want my data to be encrypted, and I accept the overhead. I trust that the network will make sure I always connect to the server I want.</td>
+</tr>
+<tr>
+  <td>verify-ca</td><td>Yes</td><td>Depends on CA policy</td><td>I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server that I trust.</td>
+</tr>
+<tr>
+  <td>verify-full</td><td>Yes</td><td>Yes</td><td>I want my data encrypted, and I accept the overhead. I want to be sure that I connect to a server I trust, and that it's the one I specify.</td>
+</tr>
+</table>
+</div>
 
 
-> ### Note
+### Note
 
 If you are using Java's default mechanism (not LibPQFactory) to create the SSL connection you will
 need to make the server certificate available to Java, the first step is to convert
