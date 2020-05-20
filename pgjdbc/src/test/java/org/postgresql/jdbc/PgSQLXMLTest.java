@@ -7,6 +7,7 @@ package org.postgresql.jdbc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import org.postgresql.test.TestUtil;
@@ -18,6 +19,7 @@ import org.junit.Test;
 import java.io.Writer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Statement;
 
@@ -46,5 +48,25 @@ public class PgSQLXMLTest extends BaseTest4 {
     SQLXML result = rs.getSQLXML(1);
     assertNotNull(result);
     assertEquals(exmplar, result.getString());
+  }
+
+  /*
+  see  https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+   */
+  @Test
+  public void testXXEGetSource() throws Exception {
+    assertThrows(SQLException.class, () -> {
+      PgSQLXML x = new PgSQLXML(null, "<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
+          + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>");
+      x.getSource(null);
+    });
+  }
+  @Test
+  public void testXXESetResult() throws Exception {
+    assertThrows(SQLException.class, () -> {
+      PgSQLXML x = new PgSQLXML(null, "<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
+          + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>");
+      x.setResult(null);
+    });
   }
 }

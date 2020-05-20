@@ -133,6 +133,10 @@ public class PgSQLXML implements SQLXML {
     try {
       if (sourceClass == null || DOMSource.class.equals(sourceClass)) {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        // disable DTD's to stop XXE attacks see
+        // https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
+        // for more information
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setErrorHandler(new NonPrintingErrorHandler());
         InputSource input = new InputSource(new StringReader(data));
@@ -193,6 +197,7 @@ public class PgSQLXML implements SQLXML {
       try {
         SAXTransformerFactory transformerFactory =
             (SAXTransformerFactory) SAXTransformerFactory.newInstance();
+        transformerFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         TransformerHandler transformerHandler = transformerFactory.newTransformerHandler();
         stringWriter = new StringWriter();
         transformerHandler.setResult(new StreamResult(stringWriter));
