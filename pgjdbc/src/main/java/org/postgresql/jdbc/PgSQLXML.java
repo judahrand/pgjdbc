@@ -29,6 +29,7 @@ import java.sql.SQLXML;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLOutputFactory;
 import javax.xml.stream.XMLStreamException;
@@ -137,13 +138,17 @@ public class PgSQLXML implements SQLXML {
         // disable DTD's to stop XXE attacks see
         // https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html
         // for more information
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        try {
+          factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        } catch (ParserConfigurationException pce) {
+          // ignore this but probably should log the fact that this is ignored
+          // OTOH our tests should also catch this.
+        }
         DocumentBuilder builder = factory.newDocumentBuilder();
         builder.setErrorHandler(new NonPrintingErrorHandler());
         InputSource input = new InputSource(new StringReader(data));
         return (T) new DOMSource(builder.parse(input));
       } else if (SAXSource.class.equals(sourceClass)) {
-
         InputSource is = new InputSource(new StringReader(data));
         return (T) new SAXSource(is);
       } else if (StreamSource.class.equals(sourceClass)) {
@@ -186,6 +191,19 @@ public class PgSQLXML implements SQLXML {
     return stringWriter;
   }
 
+  /**
+   *  Helper function to set attributes and ignore any exceptions that may be thrown
+   * @param tf Transformer factory to set attribute on
+   */
+  private void setAttribute(SAXTransformerFactory tf, String name, Object value) {
+    try {
+      tf.setAttribute(name, value);
+    } catch (IllegalArgumentException e) {
+      // just ignore this as some factories may or may not accept some of the attributes we are
+      // trying to set
+    }
+  }
+
   @Override
   public synchronized <T extends Result> T setResult(Class<T> resultClass) throws SQLException {
     checkFreed();
@@ -199,8 +217,12 @@ public class PgSQLXML implements SQLXML {
       try {
         SAXTransformerFactory transformerFactory =
             (SAXTransformerFactory) SAXTransformerFactory.newInstance();
-        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
-        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        setAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        setAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
+        setAttribute(transformerFactory, XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
+        setAttribute(transformerFactory, XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        setAttribute(transformerFactory, "http://xml.org/sax/features/external-general-entities", false);
+        setAttribute(transformerFactory, "http://xml.org/sax/features/external-parameter-entities", false);
         TransformerHandler transformerHandler = transformerFactory.newTransformerHandler();
         stringWriter = new StringWriter();
         transformerHandler.setResult(new StreamResult(stringWriter));
