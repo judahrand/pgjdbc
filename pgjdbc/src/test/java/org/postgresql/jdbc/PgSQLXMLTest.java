@@ -7,7 +7,6 @@ package org.postgresql.jdbc;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import org.postgresql.test.TestUtil;
@@ -16,12 +15,20 @@ import org.postgresql.test.jdbc2.BaseTest4;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.StringReader;
 import java.io.Writer;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 import java.sql.Statement;
+
+import javax.xml.transform.Result;
+import javax.xml.transform.Source;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.sax.SAXResult;
+import javax.xml.transform.stream.StreamSource;
 
 public class PgSQLXMLTest extends BaseTest4 {
 
@@ -55,18 +62,27 @@ public class PgSQLXMLTest extends BaseTest4 {
    */
   @Test
   public void testXXEGetSource() throws Exception {
-    assertThrows(SQLException.class, () -> {
+    try {
       PgSQLXML x = new PgSQLXML(null, "<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
           + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>");
       x.getSource(null);
-    });
+    } catch ( SQLException ex ) {
+      assertTrue("Expected to get a DOCTYPE disallowed SAXParseException", ex.getCause().getMessage().startsWith("DOCTYPE is disallowed"));
+    }
   }
+
   @Test
-  public void testXXESetResult() throws Exception {
-    assertThrows(SQLException.class, () -> {
-      PgSQLXML x = new PgSQLXML(null, "<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
-          + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>");
-      x.setResult(null);
-    });
+  public void setSaxResult() throws Exception {
+    TransformerFactory tf = TransformerFactory.newInstance();
+    Transformer identityTransformer = tf.newTransformer();
+    try {
+      PgSQLXML xml = new PgSQLXML(null);
+      Result result = xml.setResult(SAXResult.class);
+
+      Source source = new StreamSource(new StringReader("<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
+          + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>"));
+    } catch ( Exception ex ) {
+      assertTrue("Expected to get a DOCTYPE disallowed SAXParseException", ex.getCause().getMessage().startsWith("DOCTYPE is disallowed"));
+    }
   }
 }

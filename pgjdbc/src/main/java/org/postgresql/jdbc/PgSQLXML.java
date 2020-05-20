@@ -26,6 +26,7 @@ import java.io.Writer;
 import java.sql.SQLException;
 import java.sql.SQLXML;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.stream.XMLInputFactory;
@@ -142,6 +143,7 @@ public class PgSQLXML implements SQLXML {
         InputSource input = new InputSource(new StringReader(data));
         return (T) new DOMSource(builder.parse(input));
       } else if (SAXSource.class.equals(sourceClass)) {
+
         InputSource is = new InputSource(new StringReader(data));
         return (T) new SAXSource(is);
       } else if (StreamSource.class.equals(sourceClass)) {
@@ -197,7 +199,8 @@ public class PgSQLXML implements SQLXML {
       try {
         SAXTransformerFactory transformerFactory =
             (SAXTransformerFactory) SAXTransformerFactory.newInstance();
-        transformerFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
+        transformerFactory.setAttribute(XMLConstants.ACCESS_EXTERNAL_STYLESHEET, "");
         TransformerHandler transformerHandler = transformerFactory.newTransformerHandler();
         stringWriter = new StringWriter();
         transformerHandler.setResult(new StreamResult(stringWriter));
