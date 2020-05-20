@@ -5,13 +5,10 @@
 
 package org.postgresql.jdbc;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
 import org.postgresql.test.TestUtil;
 import org.postgresql.test.jdbc2.BaseTest4;
 
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,6 +23,7 @@ import java.sql.Statement;
 import javax.xml.transform.Result;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.sax.SAXResult;
 import javax.xml.transform.stream.StreamSource;
@@ -51,10 +49,10 @@ public class PgSQLXMLTest extends BaseTest4 {
 
     Statement statement = con.createStatement();
     ResultSet rs = statement.executeQuery("select * from xmltab");
-    assertTrue(rs.next());
+    Assert.assertTrue(rs.next());
     SQLXML result = rs.getSQLXML(1);
-    assertNotNull(result);
-    assertEquals(exmplar, result.getString());
+    Assert.assertNotNull(result);
+    Assert.assertEquals(exmplar, result.getString());
   }
 
   /*
@@ -66,8 +64,9 @@ public class PgSQLXMLTest extends BaseTest4 {
       PgSQLXML x = new PgSQLXML(null, "<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
           + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>");
       x.getSource(null);
+      Assert.fail("Needs to throw the exception to pass");
     } catch ( SQLException ex ) {
-      assertTrue("Expected to get a DOCTYPE disallowed SAXParseException", ex.getCause().getMessage().startsWith("DOCTYPE is disallowed"));
+      Assert.assertTrue("Expected to get a DOCTYPE disallowed SAXParseException", ex.getCause().getMessage().startsWith("DOCTYPE is disallowed"));
     }
   }
 
@@ -81,8 +80,10 @@ public class PgSQLXMLTest extends BaseTest4 {
 
       Source source = new StreamSource(new StringReader("<!DOCTYPE foo [<!ELEMENT foo ANY >\n"
           + "<!ENTITY xxe SYSTEM \"file:///etc/hosts\">]><foo>&xxe;</foo>"));
-    } catch ( Exception ex ) {
-      assertTrue("Expected to get a DOCTYPE disallowed SAXParseException", ex.getCause().getMessage().startsWith("DOCTYPE is disallowed"));
+      identityTransformer.transform(source,result);
+      Assert.fail("Needs to throw the exception to pass");
+    } catch ( TransformerException ex ) {
+      // ignore
     }
   }
 }
