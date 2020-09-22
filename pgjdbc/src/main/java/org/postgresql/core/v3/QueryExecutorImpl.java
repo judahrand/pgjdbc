@@ -14,7 +14,6 @@ import org.postgresql.copy.CopyOperation;
 import org.postgresql.copy.CopyOut;
 import org.postgresql.core.CommandCompleteParser;
 import org.postgresql.core.Encoding;
-import org.postgresql.core.EncodingPredictor;
 import org.postgresql.core.Field;
 import org.postgresql.core.NativeQuery;
 import org.postgresql.core.Oid;
@@ -38,13 +37,10 @@ import org.postgresql.core.Utils;
 import org.postgresql.core.v3.replication.V3ReplicationProtocol;
 import org.postgresql.jdbc.AutoSave;
 import org.postgresql.jdbc.BatchResultHandler;
-import org.postgresql.jdbc.TimestampUtils;
 import org.postgresql.util.ByteStreamWriter;
 import org.postgresql.util.GT;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
-import org.postgresql.util.PSQLWarning;
-import org.postgresql.util.ServerErrorMessage;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -66,7 +62,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
@@ -80,21 +75,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   private static final Logger LOGGER = Logger.getLogger(QueryExecutorImpl.class.getName());
 
   private static final Field[] NO_FIELDS = new Field[0];
-
-  /**
-   * TimeZone of the current connection (TimeZone backend parameter).
-   */
-  private @Nullable TimeZone timeZone;
-
-  /**
-   * application_name connection property.
-   */
-  private @Nullable String applicationName;
-
-  /**
-   * True if server uses integers for date and time fields. False if server uses double.
-   */
-  private boolean integerDateTimes;
 
   /**
    * Bit set that has a bit set for each oid which should be received using binary format.
@@ -122,11 +102,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
    */
   private @Nullable String lastSetSearchPathQuery;
 
-  /**
-   * The exception that caused the last transaction to fail.
-   */
-  private @Nullable SQLException transactionFailCause;
-
   private final ReplicationProtocol replicationProtocol;
 
   /**
@@ -140,16 +115,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
       int cancelSignalTimeout, Properties info) throws SQLException, IOException {
     super(pgStream, user, database, cancelSignalTimeout, info);
 
-    this.allowEncodingChanges = PGProperty.ALLOW_ENCODING_CHANGES.getBoolean(info);
     this.cleanupSavePoints = PGProperty.CLEANUP_SAVEPOINTS.getBoolean(info);
     // assignment.type.incompatible, argument.type.incompatible
     this.replicationProtocol = new V3ReplicationProtocol(this, pgStream);
     readStartupMessages();
-  }
-
-  @Override
-  public int getProtocolVersion() {
-    return 3;
   }
 
   /**
@@ -271,7 +240,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   //
   // Query execution
   //
-
   private int updateQueryMode(int flags) {
     switch (getPreferQueryMode()) {
       case SIMPLE:
@@ -2534,57 +2502,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     }
   }
 
-  private SQLException receiveErrorResponse() throws IOException {
-    // it's possible to get more than one error message for a query
-    // see libpq comments wrt backend closing a connection
-    // so, append messages to a string buffer and keep processing
-    // check at the bottom to see if we need to throw an exception
-
-    int elen = pgStream.receiveInteger4();
-    assert elen > 4 : "Error response length must be greater than 4";
-
-    EncodingPredictor.DecodeResult totalMessage = pgStream.receiveErrorString(elen - 4);
-    ServerErrorMessage errorMsg = new ServerErrorMessage(totalMessage);
-
-    if (LOGGER.isLoggable(Level.FINEST)) {
-      LOGGER.log(Level.FINEST, " <=BE ErrorMessage({0})", errorMsg.toString());
-    }
-
-    PSQLException error = new PSQLException(errorMsg, this.logServerErrorDetail);
-    if (transactionFailCause == null) {
-      transactionFailCause = error;
-    } else {
-      error.initCause(transactionFailCause);
-    }
-    return error;
-  }
-
-  private SQLWarning receiveNoticeResponse() throws IOException {
-    int nlen = pgStream.receiveInteger4();
-    assert nlen > 4 : "Notice Response length must be greater than 4";
-
-    ServerErrorMessage warnMsg = new ServerErrorMessage(pgStream.receiveString(nlen - 4));
-
-    if (LOGGER.isLoggable(Level.FINEST)) {
-      LOGGER.log(Level.FINEST, " <=BE NoticeResponse({0})", warnMsg.toString());
-    }
-
-    return new PSQLWarning(warnMsg);
-  }
-
-  private String receiveCommandStatus() throws IOException {
-    // TODO: better handle the msg len
-    int len = pgStream.receiveInteger4();
-    // read len -5 bytes (-4 for len and -1 for trailing \0)
-    String status = pgStream.receiveString(len - 5);
-    // now read and discard the trailing \0
-    pgStream.receiveChar(); // Receive(1) would allocate new byte[1], so avoid it
-
-    LOGGER.log(Level.FINEST, " <=BE CommandStatus({0})", status);
-
-    return status;
-  }
-
   private void interpretCommandStatus(String status, ResultHandler handler) {
     try {
       commandCompleteParser.parse(status);
@@ -2598,187 +2515,10 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     handler.handleCommandStatus(status, count, oid);
   }
 
-  private void receiveRFQ() throws IOException {
-    if (pgStream.receiveInteger4() != 5) {
-      throw new IOException("unexpected length of ReadyForQuery message");
-    }
-
-    char tStatus = (char) pgStream.receiveChar();
-    if (LOGGER.isLoggable(Level.FINEST)) {
-      LOGGER.log(Level.FINEST, " <=BE ReadyForQuery({0})", tStatus);
-    }
-
-    // Update connection state.
-    switch (tStatus) {
-      case 'I':
-        transactionFailCause = null;
-        setTransactionState(TransactionState.IDLE);
-        break;
-      case 'T':
-        transactionFailCause = null;
-        setTransactionState(TransactionState.OPEN);
-        break;
-      case 'E':
-        setTransactionState(TransactionState.FAILED);
-        break;
-      default:
-        throw new IOException(
-            "unexpected transaction state in ReadyForQuery message: " + (int) tStatus);
-    }
-  }
-
   @Override
   protected void sendCloseMessage() throws IOException {
     pgStream.sendChar('X');
     pgStream.sendInteger4(4);
-  }
-
-  public void readStartupMessages() throws IOException, SQLException {
-    for (int i = 0; i < 1000; i++) {
-      int beresp = pgStream.receiveChar();
-      switch (beresp) {
-        case 'Z':
-          receiveRFQ();
-          // Ready For Query; we're done.
-          return;
-
-        case 'K':
-          // BackendKeyData
-          int msgLen = pgStream.receiveInteger4();
-          if (msgLen != 12) {
-            throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
-                PSQLState.PROTOCOL_VIOLATION);
-          }
-
-          int pid = pgStream.receiveInteger4();
-          int ckey = pgStream.receiveInteger4();
-
-          if (LOGGER.isLoggable(Level.FINEST)) {
-            LOGGER.log(Level.FINEST, " <=BE BackendKeyData(pid={0},ckey={1})", new Object[]{pid, ckey});
-          }
-
-          setBackendKeyData(pid, ckey);
-          break;
-
-        case 'E':
-          // Error
-          throw receiveErrorResponse();
-
-        case 'N':
-          // Warning
-          addWarning(receiveNoticeResponse());
-          break;
-
-        case 'S':
-          // ParameterStatus
-          receiveParameterStatus();
-
-          break;
-
-        default:
-          if (LOGGER.isLoggable(Level.FINEST)) {
-            LOGGER.log(Level.FINEST, "  invalid message type={0}", (char) beresp);
-          }
-          throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
-              PSQLState.PROTOCOL_VIOLATION);
-      }
-    }
-    throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
-        PSQLState.PROTOCOL_VIOLATION);
-  }
-
-  public void receiveParameterStatus() throws IOException, SQLException {
-    // ParameterStatus
-    pgStream.receiveInteger4(); // MESSAGE SIZE
-    String name = pgStream.receiveString();
-    String value = pgStream.receiveString();
-
-    if (LOGGER.isLoggable(Level.FINEST)) {
-      LOGGER.log(Level.FINEST, " <=BE ParameterStatus({0} = {1})", new Object[]{name, value});
-    }
-
-    /* Update client-visible parameter status map for getParameterStatuses() */
-    if (name != null && !name.equals("")) {
-      onParameterStatus(name, value);
-    }
-
-    if (name.equals("client_encoding")) {
-      if (allowEncodingChanges) {
-        if (!value.equalsIgnoreCase("UTF8") && !value.equalsIgnoreCase("UTF-8")) {
-          LOGGER.log(Level.FINE,
-              "pgjdbc expects client_encoding to be UTF8 for proper operation. Actual encoding is {0}",
-              value);
-        }
-        pgStream.setEncoding(Encoding.getDatabaseEncoding(value));
-      } else if (!value.equalsIgnoreCase("UTF8") && !value.equalsIgnoreCase("UTF-8")) {
-        close(); // we're screwed now; we can't trust any subsequent string.
-        throw new PSQLException(GT.tr(
-            "The server''s client_encoding parameter was changed to {0}. The JDBC driver requires client_encoding to be UTF8 for correct operation.",
-            value), PSQLState.CONNECTION_FAILURE);
-
-      }
-    }
-
-    if (name.equals("DateStyle") && !value.startsWith("ISO")
-        && !value.toUpperCase().startsWith("ISO")) {
-      close(); // we're screwed now; we can't trust any subsequent date.
-      throw new PSQLException(GT.tr(
-          "The server''s DateStyle parameter was changed to {0}. The JDBC driver requires DateStyle to begin with ISO for correct operation.",
-          value), PSQLState.CONNECTION_FAILURE);
-    }
-
-    if (name.equals("standard_conforming_strings")) {
-      if (value.equals("on")) {
-        setStandardConformingStrings(true);
-      } else if (value.equals("off")) {
-        setStandardConformingStrings(false);
-      } else {
-        close();
-        // we're screwed now; we don't know how to escape string literals
-        throw new PSQLException(GT.tr(
-            "The server''s standard_conforming_strings parameter was reported as {0}. The JDBC driver expected on or off.",
-            value), PSQLState.CONNECTION_FAILURE);
-      }
-      return;
-    }
-
-    if ("TimeZone".equals(name)) {
-      setTimeZone(TimestampUtils.parseBackendTimeZone(value));
-    } else if ("application_name".equals(name)) {
-      setApplicationName(value);
-    } else if ("server_version_num".equals(name)) {
-      setServerVersionNum(Integer.parseInt(value));
-    } else if ("server_version".equals(name)) {
-      setServerVersion(value);
-    }  else if ("integer_datetimes".equals(name)) {
-      if ("on".equals(value)) {
-        setIntegerDateTimes(true);
-      } else if ("off".equals(value)) {
-        setIntegerDateTimes(false);
-      } else {
-        throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
-            PSQLState.PROTOCOL_VIOLATION);
-      }
-    }
-  }
-
-  public void setTimeZone(TimeZone timeZone) {
-    this.timeZone = timeZone;
-  }
-
-  public @Nullable TimeZone getTimeZone() {
-    return timeZone;
-  }
-
-  public void setApplicationName(String applicationName) {
-    this.applicationName = applicationName;
-  }
-
-  public String getApplicationName() {
-    if (applicationName == null) {
-      return "";
-    }
-    return applicationName;
   }
 
   @Override
@@ -2808,14 +2548,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
     useBinarySendForOids.addAll(oids);
   }
 
-  private void setIntegerDateTimes(boolean state) {
-    integerDateTimes = state;
-  }
-
-  public boolean getIntegerDateTimes() {
-    return integerDateTimes;
-  }
-
   private final Deque<SimpleQuery> pendingParseQueue = new ArrayDeque<SimpleQuery>();
   private final Deque<Portal> pendingBindQueue = new ArrayDeque<Portal>();
   private final Deque<ExecuteRequest> pendingExecuteQueue = new ArrayDeque<ExecuteRequest>();
@@ -2824,7 +2556,6 @@ public class QueryExecutorImpl extends QueryExecutorBase {
   private final Deque<SimpleQuery> pendingDescribePortalQueue = new ArrayDeque<SimpleQuery>();
 
   private long nextUniqueID = 1;
-  private final boolean allowEncodingChanges;
   private final boolean cleanupSavePoints;
 
   /**

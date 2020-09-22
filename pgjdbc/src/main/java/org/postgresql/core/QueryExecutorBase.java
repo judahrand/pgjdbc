@@ -10,10 +10,13 @@ import org.postgresql.PGProperty;
 import org.postgresql.jdbc.AutoSave;
 import org.postgresql.jdbc.EscapeSyntaxCallMode;
 import org.postgresql.jdbc.PreferQueryMode;
+import org.postgresql.jdbc.TimestampUtils;
+import org.postgresql.util.GT;
 import org.postgresql.util.HostSpec;
 import org.postgresql.util.LruCache;
 import org.postgresql.util.PSQLException;
 import org.postgresql.util.PSQLState;
+import org.postgresql.util.PSQLWarning;
 import org.postgresql.util.ServerErrorMessage;
 
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
@@ -26,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -51,6 +55,7 @@ public abstract class QueryExecutorBase implements QueryExecutor {
   private AutoSave autoSave;
   private boolean flushCacheOnDeallocate = true;
   protected final boolean logServerErrorDetail;
+  protected final boolean allowEncodingChanges;
 
   // default value for server versions that don't report standard_conforming_strings
   private boolean standardConformingStrings = false;
@@ -65,6 +70,26 @@ public abstract class QueryExecutorBase implements QueryExecutor {
   private final TreeMap<String,String> parameterStatuses
       = new TreeMap<String,String>(String.CASE_INSENSITIVE_ORDER);
 
+  /**
+   * The exception that caused the last transaction to fail.
+   */
+  protected  @Nullable SQLException transactionFailCause;
+
+  /**
+   * TimeZone of the current connection (TimeZone backend parameter).
+   */
+  protected  @Nullable TimeZone timeZone;
+
+  /**
+   * application_name connection property.
+   */
+  protected  @Nullable String applicationName;
+
+  /**
+   * True if server uses integers for date and time fields. False if server uses double.
+   */
+  private boolean integerDateTimes;
+
   @SuppressWarnings({"assignment.type.incompatible", "argument.type.incompatible"})
   protected QueryExecutorBase(PGStream pgStream, String user,
       String database, int cancelSignalTimeout, Properties info) throws SQLException {
@@ -72,6 +97,7 @@ public abstract class QueryExecutorBase implements QueryExecutor {
     this.user = user;
     this.database = database;
     this.cancelSignalTimeout = cancelSignalTimeout;
+    this.allowEncodingChanges = PGProperty.ALLOW_ENCODING_CHANGES.getBoolean(info);
     this.reWriteBatchedInserts = PGProperty.REWRITE_BATCHED_INSERTS.getBoolean(info);
     this.columnSanitiserDisabled = PGProperty.DISABLE_COLUMN_SANITISER.getBoolean(info);
     String callMode = PGProperty.ESCAPE_SYNTAX_CALL_MODE.get(info);
@@ -459,4 +485,249 @@ public abstract class QueryExecutorBase implements QueryExecutor {
 
     parameterStatuses.put(parameterName, parameterStatus);
   }
+
+  /**
+   * We really only have one version now
+   * @return
+   */
+  public int getProtocolVersion() {
+    return 3;
+  }
+
+  protected void receiveRFQ() throws IOException {
+    if (pgStream.receiveInteger4() != 5) {
+      throw new IOException("unexpected length of ReadyForQuery message");
+    }
+
+    char tStatus = (char) pgStream.receiveChar();
+    if (LOGGER.isLoggable(Level.FINEST)) {
+      LOGGER.log(Level.FINEST, " <=BE ReadyForQuery({0})", tStatus);
+    }
+
+    // Update connection state.
+    switch (tStatus) {
+      case 'I':
+        transactionFailCause = null;
+        setTransactionState(TransactionState.IDLE);
+        break;
+      case 'T':
+        transactionFailCause = null;
+        setTransactionState(TransactionState.OPEN);
+        break;
+      case 'E':
+        setTransactionState(TransactionState.FAILED);
+        break;
+      default:
+        throw new IOException(
+            "unexpected transaction state in ReadyForQuery message: " + (int) tStatus);
+    }
+  }
+
+  protected SQLException receiveErrorResponse() throws IOException {
+    // it's possible to get more than one error message for a query
+    // see libpq comments wrt backend closing a connection
+    // so, append messages to a string buffer and keep processing
+    // check at the bottom to see if we need to throw an exception
+
+    int elen = pgStream.receiveInteger4();
+    assert elen > 4 : "Error response length must be greater than 4";
+
+    EncodingPredictor.DecodeResult totalMessage = pgStream.receiveErrorString(elen - 4);
+    ServerErrorMessage errorMsg = new ServerErrorMessage(totalMessage);
+
+    if (LOGGER.isLoggable(Level.FINEST)) {
+      LOGGER.log(Level.FINEST, " <=BE ErrorMessage({0})", errorMsg.toString());
+    }
+
+    PSQLException error = new PSQLException(errorMsg, this.logServerErrorDetail);
+    if (transactionFailCause == null) {
+      transactionFailCause = error;
+    } else {
+      error.initCause(transactionFailCause);
+    }
+    return error;
+  }
+
+  protected SQLWarning receiveNoticeResponse() throws IOException {
+    int nlen = pgStream.receiveInteger4();
+    assert nlen > 4 : "Notice Response length must be greater than 4";
+
+    ServerErrorMessage warnMsg = new ServerErrorMessage(pgStream.receiveString(nlen - 4));
+
+    if (LOGGER.isLoggable(Level.FINEST)) {
+      LOGGER.log(Level.FINEST, " <=BE NoticeResponse({0})", warnMsg.toString());
+    }
+
+    return new PSQLWarning(warnMsg);
+  }
+
+  protected String receiveCommandStatus() throws IOException {
+    // TODO: better handle the msg len
+    int len = pgStream.receiveInteger4();
+    // read len -5 bytes (-4 for len and -1 for trailing \0)
+    String status = pgStream.receiveString(len - 5);
+    // now read and discard the trailing \0
+    pgStream.receiveChar(); // Receive(1) would allocate new byte[1], so avoid it
+
+    LOGGER.log(Level.FINEST, " <=BE CommandStatus({0})", status);
+
+    return status;
+  }
+
+  protected void receiveParameterStatus() throws IOException, SQLException {
+    // ParameterStatus
+    pgStream.receiveInteger4(); // MESSAGE SIZE
+    String name = pgStream.receiveString();
+    String value = pgStream.receiveString();
+
+    if (LOGGER.isLoggable(Level.FINEST)) {
+      LOGGER.log(Level.FINEST, " <=BE ParameterStatus({0} = {1})", new Object[]{name, value});
+    }
+
+    /* Update client-visible parameter status map for getParameterStatuses() */
+    if (name != null && !name.equals("")) {
+      onParameterStatus(name, value);
+    }
+
+    if (name.equals("client_encoding")) {
+      if (allowEncodingChanges) {
+        if (!value.equalsIgnoreCase("UTF8") && !value.equalsIgnoreCase("UTF-8")) {
+          LOGGER.log(Level.FINE,
+              "pgjdbc expects client_encoding to be UTF8 for proper operation. Actual encoding is {0}",
+              value);
+        }
+        pgStream.setEncoding(Encoding.getDatabaseEncoding(value));
+      } else if (!value.equalsIgnoreCase("UTF8") && !value.equalsIgnoreCase("UTF-8")) {
+        close(); // we're screwed now; we can't trust any subsequent string.
+        throw new PSQLException(GT.tr(
+            "The server''s client_encoding parameter was changed to {0}. The JDBC driver requires client_encoding to be UTF8 for correct operation.",
+            value), PSQLState.CONNECTION_FAILURE);
+
+      }
+    }
+
+    if (name.equals("DateStyle") && !value.startsWith("ISO")
+        && !value.toUpperCase().startsWith("ISO")) {
+      close(); // we're screwed now; we can't trust any subsequent date.
+      throw new PSQLException(GT.tr(
+          "The server''s DateStyle parameter was changed to {0}. The JDBC driver requires DateStyle to begin with ISO for correct operation.",
+          value), PSQLState.CONNECTION_FAILURE);
+    }
+
+    if (name.equals("standard_conforming_strings")) {
+      if (value.equals("on")) {
+        setStandardConformingStrings(true);
+      } else if (value.equals("off")) {
+        setStandardConformingStrings(false);
+      } else {
+        close();
+        // we're screwed now; we don't know how to escape string literals
+        throw new PSQLException(GT.tr(
+            "The server''s standard_conforming_strings parameter was reported as {0}. The JDBC driver expected on or off.",
+            value), PSQLState.CONNECTION_FAILURE);
+      }
+      return;
+    }
+
+    if ("TimeZone".equals(name)) {
+      setTimeZone(TimestampUtils.parseBackendTimeZone(value));
+    } else if ("application_name".equals(name)) {
+      setApplicationName(value);
+    } else if ("server_version_num".equals(name)) {
+      setServerVersionNum(Integer.parseInt(value));
+    } else if ("server_version".equals(name)) {
+      setServerVersion(value);
+    }  else if ("integer_datetimes".equals(name)) {
+      if ("on".equals(value)) {
+        setIntegerDateTimes(true);
+      } else if ("off".equals(value)) {
+        setIntegerDateTimes(false);
+      } else {
+        throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
+            PSQLState.PROTOCOL_VIOLATION);
+      }
+    }
+  }
+
+  public void setTimeZone(TimeZone timeZone) {
+    this.timeZone = timeZone;
+  }
+
+  public @Nullable TimeZone getTimeZone() {
+    return timeZone;
+  }
+
+  public void setApplicationName(String applicationName) {
+    this.applicationName = applicationName;
+  }
+
+  public String getApplicationName() {
+    if (applicationName == null) {
+      return "";
+    }
+    return applicationName;
+  }
+
+  public void readStartupMessages() throws IOException, SQLException {
+    for (int i = 0; i < 1000; i++) {
+      int beresp = pgStream.receiveChar();
+      switch (beresp) {
+        case 'Z':
+          receiveRFQ();
+          // Ready For Query; we're done.
+          return;
+
+        case 'K':
+          // BackendKeyData
+          int msgLen = pgStream.receiveInteger4();
+          if (msgLen != 12) {
+            throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
+                PSQLState.PROTOCOL_VIOLATION);
+          }
+
+          int pid = pgStream.receiveInteger4();
+          int ckey = pgStream.receiveInteger4();
+
+          if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.log(Level.FINEST, " <=BE BackendKeyData(pid={0},ckey={1})", new Object[]{pid, ckey});
+          }
+
+          setBackendKeyData(pid, ckey);
+          break;
+
+        case 'E':
+          // Error
+          throw receiveErrorResponse();
+
+        case 'N':
+          // Warning
+          addWarning(receiveNoticeResponse());
+          break;
+
+        case 'S':
+          // ParameterStatus
+          receiveParameterStatus();
+
+          break;
+
+        default:
+          if (LOGGER.isLoggable(Level.FINEST)) {
+            LOGGER.log(Level.FINEST, "  invalid message type={0}", (char) beresp);
+          }
+          throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
+              PSQLState.PROTOCOL_VIOLATION);
+      }
+    }
+    throw new PSQLException(GT.tr("Protocol error.  Session setup failed."),
+        PSQLState.PROTOCOL_VIOLATION);
+  }
+
+  protected void setIntegerDateTimes(boolean state) {
+    integerDateTimes = state;
+  }
+
+  public boolean getIntegerDateTimes() {
+    return integerDateTimes;
+  }
+
 }
