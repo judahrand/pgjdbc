@@ -58,7 +58,7 @@ public class HStoreConverter {
       for (Entry<?, ?> e : m.entrySet()) {
         Object mapKey = e.getKey();
         if (mapKey == null) {
-          throw new PSQLException(GT.tr("hstore key must not be null"),
+          throw new PSQLException(GT.tr("Hstore key must not be null"),
               PSQLState.INVALID_PARAMETER_VALUE);
         }
         byte[] key = encoding.encode(mapKey.toString());

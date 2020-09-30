@@ -192,7 +192,7 @@ public class PGXAConnection extends PGPooledConnection implements XAConnection, 
     }
 
     if (xid == null) {
-      throw new PGXAException(GT.tr("xid must not be null"), XAException.XAER_INVAL);
+      throw new PGXAException(GT.tr("XID must not be null"), XAException.XAER_INVAL);
     }
 
     if (state == State.ACTIVE) {
@@ -205,7 +205,7 @@ public class PGXAConnection extends PGPooledConnection implements XAConnection, 
 
     // Check implementation deficiency preconditions
     if (flags == TMRESUME) {
-      throw new PGXAException(GT.tr("suspend/resume not implemented"), XAException.XAER_RMERR);
+      throw new PGXAException(GT.tr("Suspend/resume not implemented"), XAException.XAER_RMERR);
     }
 
     // It's ok to join an ended transaction. WebLogic does that.
@@ -278,17 +278,17 @@ public class PGXAConnection extends PGPooledConnection implements XAConnection, 
     }
 
     if (xid == null) {
-      throw new PGXAException(GT.tr("xid must not be null"), XAException.XAER_INVAL);
+      throw new PGXAException(GT.tr("XID must not be null"), XAException.XAER_INVAL);
     }
 
     if (state != State.ACTIVE || !xid.equals(currentXid)) {
-      throw new PGXAException(GT.tr("tried to call end without corresponding start call. state={0}, start xid={1}, currentXid={2}, preparedXid={3}", state, xid, currentXid, preparedXid),
+      throw new PGXAException(GT.tr("Tried to call end without corresponding start call. state={0}, start xid={1}, currentXid={2}, preparedXid={3}", state, xid, currentXid, preparedXid),
           XAException.XAER_PROTO);
     }
 
     // Check implementation deficiency preconditions
     if (flags == XAResource.TMSUSPEND) {
-      throw new PGXAException(GT.tr("suspend/resume not implemented"), XAException.XAER_RMERR);
+      throw new PGXAException(GT.tr("Suspend/resume not implemented"), XAException.XAER_RMERR);
     }
 
     // We ignore TMFAIL. It's just a hint to the RM. We could roll back immediately
@@ -493,7 +493,7 @@ public class PGXAConnection extends PGPooledConnection implements XAConnection, 
     }
 
     if (xid == null) {
-      throw new PGXAException(GT.tr("xid must not be null"), XAException.XAER_INVAL);
+      throw new PGXAException(GT.tr("XID must not be null"), XAException.XAER_INVAL);
     }
 
     if (onePhase) {
@@ -539,7 +539,7 @@ public class PGXAConnection extends PGPooledConnection implements XAConnection, 
             xid, currentXid), XAException.XAER_NOTA);
       }
       if (state != State.ENDED) {
-        throw new PGXAException(GT.tr("commit called before end. commit xid={0}, state={1}", xid, state), XAException.XAER_PROTO);
+        throw new PGXAException(GT.tr("Commit called before end. commit xid={0}, state={1}", xid, state), XAException.XAER_PROTO);
       }
 
       // Preconditions are met. Commit

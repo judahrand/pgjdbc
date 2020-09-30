@@ -230,7 +230,7 @@ class PgCallableStatement extends PgPreparedStatement implements CallableStateme
 
   public boolean wasNull() throws SQLException {
     if (lastIndex == 0 || callResult == null) {
-      throw new PSQLException(GT.tr("wasNull cannot be call before fetching a result."),
+      throw new PSQLException(GT.tr("Method wasNull cannot be call before fetching a result."),
           PSQLState.OBJECT_NOT_IN_STATE);
     }
 

@@ -125,7 +125,7 @@ public class Oid {
       } catch (NumberFormatException ex) {
       }
     }
-    throw new PSQLException(GT.tr("oid type {0} not known and not a number", oid),
+    throw new PSQLException(GT.tr("Oid type {0} not known and not a number", oid),
         PSQLState.INVALID_PARAMETER_VALUE);
   }
 }
